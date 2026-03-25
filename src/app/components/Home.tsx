@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Search, 
   MapPin, 
@@ -11,6 +11,7 @@ import {
 import { useNavigate } from "react-router";
 import { motion } from "motion/react";
 import { cn } from "./ui/utils";
+import { auth } from "../../lib/supabase";
 
 export function Home() {
   const navigate = useNavigate();
@@ -20,15 +21,26 @@ export function Home() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
 
+  // Check for auto-login on mount
+  useEffect(() => {
+    const user = auth.getUser();
+    if (user) {
+      // User is already logged in, redirect to appropriate page
+      if (user.role === "donor") {
+        navigate("/dashboard");
+      } else if (user.role === "needer") {
+        navigate("/results");
+      } else {
+        navigate("/hospitals");
+      }
+    }
+  }, [navigate]);
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (role === "needer") {
-      navigate(`/results?group=${encodeURIComponent(bloodGroup)}&loc=${encodeURIComponent(location)}`);
-    } else if (role === "donor") {
-      navigate("/dashboard");
-    } else {
-      navigate("/hospitals");
-    }
+    
+    // Redirect to login instead of direct navigation
+    navigate("/login");
   };
 
   return (
@@ -36,7 +48,7 @@ export function Home() {
       {/* Prediction Alert Banner - Simplified because global banner exists */}
       <div className="w-full max-w-4xl mb-12 hidden md:block">
         <p className="text-center text-xs font-black text-slate-400 uppercase tracking-widest">
-          The <span className="text-red-600 italic font-black">VITA</span> Network
+          The <span className="text-red-600 italic font-black">Blood Bridge</span> Network
         </p>
       </div>
 

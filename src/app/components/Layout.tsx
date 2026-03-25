@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, Outlet, useLocation } from "react-router";
+import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { 
   LayoutDashboard, 
   Users, 
@@ -13,11 +13,14 @@ import {
   Home,
   Menu,
   X,
-  UserCircle
+  UserCircle,
+  LogOut
 } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { motion, AnimatePresence } from "motion/react";
+import { auth } from "../../lib/supabase";
+import { toast } from "sonner";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -35,7 +38,21 @@ const navItems = [
 
 export function Layout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const [currentUser, setCurrentUser] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    const user = auth.getUser();
+    setCurrentUser(user);
+  }, [location]);
+
+  const handleLogout = () => {
+    auth.clearUser();
+    toast.success("Logged out successfully");
+    navigate("/");
+    setCurrentUser(null);
+  };
 
   // Determine if we're in the "Consumer Flow" (Home, Results, Status)
   const isConsumerFlow = ["/", "/results", "/status"].includes(location.pathname);
@@ -64,7 +81,7 @@ export function Layout() {
               <Heart size={22} fill="currentColor" />
             </div>
             <div className="hidden sm:block">
-              <h1 className="text-xl font-black tracking-tighter text-slate-900 leading-none">VITA</h1>
+              <h1 className="text-xl font-black tracking-tighter text-slate-900 leading-none">Blood Bridge</h1>
               <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mt-1">Life Sync Network</p>
             </div>
           </Link>
@@ -89,18 +106,37 @@ export function Layout() {
             ))}
           </nav>
         )}
-
-        {/* Global Controls */}
-        <div className="flex items-center gap-4">
-          <button className="hidden sm:flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95">
-            <UserCircle size={16} /> Login
-          </button>
-          <button 
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="p-3 bg-white border border-slate-100 rounded-2xl text-slate-400 hover:text-red-600 transition-all shadow-sm"
-          >
-            {isMenuOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
+        
+        {/* User Menu or Login Button */}
+        <div className="flex items-center gap-3">
+          {currentUser ? (
+            <div className="flex items-center gap-3">
+              <div className="hidden md:flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-white font-black text-sm">
+                  {currentUser.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-black text-slate-900 leading-none">{currentUser.name}</p>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{currentUser.role}</p>
+                </div>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2"
+                title="Logout"
+              >
+                <LogOut size={14} />
+                <span className="hidden md:inline">Logout</span>
+              </button>
+            </div>
+          ) : location.pathname === "/" ? (
+            <Link
+              to="/login"
+              className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-red-200 transition-all active:scale-95"
+            >
+              Get Started
+            </Link>
+          ) : null}
         </div>
       </header>
 
@@ -175,7 +211,7 @@ export function Layout() {
           <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400">
             <Heart size={16} />
           </div>
-          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">© 2026 VITA Blood System</p>
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">© 2026 Blood Bridge System</p>
         </div>
         <div className="flex items-center gap-8">
           <a href="#" className="text-xs font-bold text-slate-400 hover:text-red-600 transition-colors uppercase tracking-widest">Privacy</a>

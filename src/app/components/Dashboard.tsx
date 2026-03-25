@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Users, 
   Droplets, 
@@ -13,13 +13,32 @@ import {
   ShieldCheck,
   Star,
   X,
-  AlertCircle
+  AlertCircle,
+  AlertTriangle
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "./ui/utils";
+import { auth, api } from "../../lib/supabase";
+import { toast } from "sonner";
+import { useNavigate } from "react-router";
+
+interface SOSAlert {
+  id: string;
+  userName: string;
+  bloodGroup: string;
+  location: string;
+  urgency: string;
+  hospital: string;
+  message: string;
+  createdAt: string;
+  respondedBy: any[];
+}
 
 export function Dashboard() {
+  const navigate = useNavigate();
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [isAvailable, setIsAvailable] = useState(true);
+  const [sosAlerts, setSOSAlerts] = useState<SOSAlert[]>([]);
   const [requests, setRequests] = useState([
     { id: 1, bloodGroup: "O-", distance: "2.4 km", urgency: "Critical", patient: "Emergency Trauma", isPriority: true },
     { id: 2, bloodGroup: "O-", distance: "5.1 km", urgency: "Medium", patient: "Surgery Prep", isPriority: false },
@@ -37,6 +56,42 @@ export function Dashboard() {
   // Mock eligibility days remaining
   const daysRemaining = 42; 
   const isTimeEligible = daysRemaining <= 0;
+
+  // Load current user and SOS alerts on mount
+  useEffect(() => {
+    const user = auth.getUser();
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+    setCurrentUser(user);
+    loadSOSAlerts();
+
+    // Poll for SOS alerts every 10 seconds
+    const interval = setInterval(loadSOSAlerts, 10000);
+    return () => clearInterval(interval);
+  }, [navigate]);
+
+  const loadSOSAlerts = async () => {
+    try {
+      const { alerts } = await api.getActiveSOS();
+      setSOSAlerts(alerts);
+    } catch (error) {
+      console.error("Failed to load SOS alerts:", error);
+    }
+  };
+
+  const respondToSOS = async (sosId: string) => {
+    if (!currentUser) return;
+    
+    try {
+      await api.respondToSOS(sosId, currentUser.id, currentUser.name, currentUser.phone);
+      toast.success("You've responded to this SOS alert!");
+      loadSOSAlerts();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to respond to SOS");
+    }
+  };
 
   const handleAction = (id: number, action: string) => {
     if (action === "accept") {
@@ -71,18 +126,22 @@ export function Dashboard() {
       {/* Welcome Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm relative overflow-hidden">
         <div className="flex items-center gap-6">
-          <div className="w-16 h-16 rounded-[24px] bg-slate-100 overflow-hidden ring-4 ring-white shadow-xl">
-            <img src="https://images.unsplash.com/photo-1579171817110-e4aa2d543305?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzbWlsaW5nJTIwcGVyc29uJTIwcG9ydHJhaXQlMjBwcm9mZXNzaW9uYWx8ZW58MXx8fHwxNzc0NDMxNTk1fDA&ixlib=rb-4.1.0&q=80&w=1080" alt="Avatar" className="w-full h-full object-cover" />
+          <div className="w-16 h-16 rounded-[24px] bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-white font-black text-2xl ring-4 ring-white shadow-xl">
+            {currentUser?.name?.charAt(0).toUpperCase() || "?"}
           </div>
           <div>
-            <h1 className="text-3xl font-black text-slate-900 leading-none mb-1">Welcome back, Marcus</h1>
+            <h1 className="text-3xl font-black text-slate-900 leading-none mb-1">
+              Welcome back, {currentUser?.name || "Loading..."}
+            </h1>
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-slate-400 font-medium text-sm flex items-center gap-1">
-                <ShieldCheck size={14} className="text-emerald-500" /> Verified Donor • O- Negative
+                <ShieldCheck size={14} className="text-emerald-500" /> Verified {currentUser?.role || "User"} • {currentUser?.bloodGroup || "Type not set"}
               </p>
               <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 rounded-full border border-amber-100">
                 <Star size={12} className="text-amber-500 fill-amber-500" />
-                <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest">4.8 • Highly Reliable</span>
+                <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest">
+                  {currentUser?.rating?.toFixed(1) || "5.0"} • Highly Reliable
+                </span>
               </div>
             </div>
           </div>
@@ -231,6 +290,72 @@ export function Dashboard() {
               </AnimatePresence>
             </div>
           </section>
+
+          {/* SOS Emergency Alerts */}
+          {sosAlerts.length > 0 && (
+            <section className="space-y-6">
+              <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest px-2 flex items-center gap-2">
+                <AlertTriangle size={18} className="text-red-600 animate-pulse" /> Emergency SOS Alerts
+              </h3>
+              
+              <div className="grid grid-cols-1 gap-4">
+                {sosAlerts.map((sos) => (
+                  <motion.div
+                    key={sos.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-red-50 p-6 rounded-[32px] border-2 border-red-200 shadow-lg space-y-4 relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-red-600/10 rounded-full blur-3xl" />
+                    
+                    <div className="relative z-10 flex justify-between items-start">
+                      <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-2xl bg-red-600 flex items-center justify-center text-white font-black text-lg shadow-xl">
+                          {sos.bloodGroup}
+                        </div>
+                        <div>
+                          <h4 className="font-black text-slate-900 text-lg">{sos.userName} needs {sos.bloodGroup}</h4>
+                          <p className="text-sm font-bold text-red-700 flex items-center gap-1 mt-1">
+                            <MapPin size={14} /> {sos.location} • {sos.urgency} urgency
+                          </p>
+                          {sos.hospital && (
+                            <p className="text-xs text-slate-600 font-medium mt-1">📍 {sos.hospital}</p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <span className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest animate-pulse">
+                        LIVE SOS
+                      </span>
+                    </div>
+
+                    {sos.message && (
+                      <div className="relative z-10 p-4 bg-white rounded-2xl border border-red-100">
+                        <p className="text-sm text-slate-700 font-medium italic">"{sos.message}"</p>
+                      </div>
+                    )}
+
+                    <div className="relative z-10 flex items-center justify-between pt-2">
+                      <div className="flex items-center gap-2">
+                        <Users size={14} className="text-slate-400" />
+                        <span className="text-xs font-bold text-slate-600">
+                          {sos.respondedBy.length} responders
+                        </span>
+                      </div>
+                      
+                      <button
+                        onClick={() => respondToSOS(sos.id)}
+                        disabled={sos.respondedBy.some((r: any) => r.userId === currentUser?.id)}
+                        className="px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+                      >
+                        {sos.respondedBy.some((r: any) => r.userId === currentUser?.id) ? "Responded ✓" : "I Can Help"}
+                      </button>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Leaderboard & Rewards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
